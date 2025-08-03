@@ -2,6 +2,8 @@ package wtf.moonlight.module.impl.display.island;
 
 import lombok.Getter;
 import lombok.Setter;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.ScaledResolution;
 import wtf.moonlight.Client;
 import wtf.moonlight.events.render.Shader2DEvent;
 import wtf.moonlight.module.impl.display.Interface;
@@ -12,27 +14,36 @@ import java.awt.*;
 @Getter
 @Setter
 public abstract class Island {
-    public String name;
-    public Type type;
-    public TimerUtil timerUtil = new TimerUtil();
+    private final String name;
+    private final IslandType type;
+    private final TimerUtil timerUtil = new TimerUtil();
+
     public long delay;
-    int x, y, width, hight;
+    public final float x, y, width, height;
+
+    protected final Module module;
     protected Interface setting = Client.INSTANCE.getModuleManager().getModule(Interface.class);
 
-    public Island(String name, Type type, long delay, int x, int y, int width, int hight) {
+    public Island(String name, IslandType type, long delay, float x, float y, float width, float height) {
         this.name = name;
         this.type = type;
         this.delay = delay;
         this.x = x;
         this.y = y;
         this.width = width;
-        this.hight = hight;
+        this.height = height;
+        this.module = null;
     }
 
-    public enum Type {
-        Info,
-        Scaffold,
-        PlayerList,
+    public Island(String name, IslandType type, long delay, float x, float y, float width, int height, Module module) {
+        this.name = name;
+        this.type = type;
+        this.delay = delay;
+        this.x = x;
+        this.y = y;
+        this.width = width;
+        this.height = height;
+        this.module = module;
     }
 
     public abstract boolean shouldRender();
@@ -47,5 +58,18 @@ public abstract class Island {
 
     public int getBackgroundColor() {
         return setting.bgColor();
+    }
+
+    public int getThemeColor(int counter) {
+        return setting.color(counter);
+    }
+
+    public int getBackgroundColor(int counter) {
+        return setting.bgColor(counter);
+    }
+
+    public static float getMiddleX() {
+        ScaledResolution sr = new ScaledResolution(Minecraft.getMinecraft());
+        return (float) sr.getScaledWidth_double();
     }
 }

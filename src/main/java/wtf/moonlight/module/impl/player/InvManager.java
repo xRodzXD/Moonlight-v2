@@ -5,13 +5,10 @@ import net.minecraft.client.gui.inventory.GuiChest;
 import net.minecraft.client.gui.inventory.GuiInventory;
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.enchantment.EnchantmentHelper;
-import net.minecraft.inventory.Container;
 import net.minecraft.item.*;
-import net.minecraft.network.Packet;
 import net.minecraft.network.play.client.C08PacketPlayerBlockPlacement;
 import net.minecraft.network.play.client.C0DPacketCloseWindow;
 import net.minecraft.network.play.client.C16PacketClientStatus;
-import net.minecraft.network.play.server.S32PacketConfirmTransaction;
 import net.minecraft.util.DamageSource;
 import com.cubk.EventTarget;
 import wtf.moonlight.events.packet.PacketEvent;
@@ -34,56 +31,56 @@ import wtf.moonlight.component.SelectorDetectionComponent;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.stream.Stream;
 
 @ModuleInfo(name = "InvManager", category = Categor.Player)
 public class InvManager extends Module {
+    private final ListValue modeValue = new ListValue("Mode", new String[]{"Basic", "OpenInv"},  "Basic", this);
+    private final SliderValue delay = new SliderValue("Delay", 150, 0, 500, this);
+
     private final BoolValue autoArmor = new BoolValue("AutoArmor", true, this);
-    private final BoolValue keepSync = new BoolValue("Keep Sync", false, this);
     private final BoolValue dropItems = new BoolValue("Drop Items", true, this);
 
-    private final SliderValue swordSlot = new SliderValue("Sword Slot", 1, 1, 9, this);
-    private final SliderValue gappleSlot = new SliderValue("Gapple Slot", 2, 1, 9, this);
-    private final SliderValue pickaxeSlot = new SliderValue("Pickaxe Slot", 4, 1, 9, this);
-    private final SliderValue axeSlot = new SliderValue("Axe Slot", 5, 1, 9, this);
-    private final SliderValue blockSlot = new SliderValue("Block Slot", 6, 1, 9, this);
-    private final SliderValue potionSlot = new SliderValue("Potion Slot", 8, 1, 9, this);
-    private final SliderValue delay = new SliderValue("Delay", 150, 0, 500, 10, this);
+    public final BoolValue keepBucket = new BoolValue("Keep Bucket", true, this);
+    public final BoolValue keepOtherFood = new BoolValue("Keep Other Food", false, this);
+    public final BoolValue keepProjectiles = new BoolValue("Keep Projectiles", false, this);
+    public final BoolValue keepFishingRod = new BoolValue("Keep Fishing Rod", false, this);
 
-    private final ListValue modeValue = new ListValue("Mode", new String[]{"Basic", "OpenInv"},  "Basic", this);
+    private final SliderValue swordSlot = new SliderValue("Sword Slot", 1, 0, 9, this);
+    private final SliderValue throwableSlot = new SliderValue("Throwable Slot", 2, 0, 9, this);
+    private final SliderValue gappleSlot = new SliderValue("Gapple Slot", 3, 0, 9, this);
+    private final SliderValue blockSlot = new SliderValue("Block Slot", 4, 0, 9, this);
+    private final SliderValue bucketSlot = new SliderValue("Bucket Slot", 7, 0, 9, this);
+    private final SliderValue potionSlot = new SliderValue("Potion Slot", 8, 0, 9, this);
+    private final SliderValue pickaxeSlot = new SliderValue("Pickaxe Slot", 8, 0, 9, this);
+    private final SliderValue axeSlot = new SliderValue("Axe Slot", 9, 0, 9, this);
 
-    public final TimerUtil timerUtil = new TimerUtil();
-    private int chestTicks, attackTicks, placeTicks;
     @Getter
     private boolean moved, open;
     private long nextClick;
     public short action;
+
+    public final TimerUtil timerUtil = new TimerUtil();
+    private int chestTicks, attackTicks, placeTicks;
+
+    @Override
+    public void onDisable() {
+        if (this.canOpenInventory()) {
+            this.closeInventory();
+        }
+        super.onDisable();
+    }
+
+    @EventTarget
+    public void onAttack(AttackEvent event) {
+        this.attackTicks = 0;
+    }
 
     @EventTarget
     public void onPacketSend(PacketEvent event) {
         if (event.getState() == PacketEvent.State.OUTGOING) {
             if (event.getPacket() instanceof C08PacketPlayerBlockPlacement) {
                 this.placeTicks = 0;
-            }
-        }
-    }
-
-    @EventTarget
-    public void onPacketReceive(PacketEvent event) {
-        if (event.getState() == PacketEvent.State.INCOMING) {
-            if (keepSync.get()) {
-                Packet<?> packet = event.getPacket();
-
-                if (packet instanceof S32PacketConfirmTransaction wrapper) {
-                    Container inventory = mc.thePlayer.inventoryContainer;
-
-                    if (wrapper.getWindowId() == inventory.windowId) {
-                        this.action = wrapper.getActionNumber();
-
-                        if (this.action > 0 && this.action < inventory.transactionID) {
-                            inventory.transactionID = (short) (this.action + 1);
-                        }
-                    }
-                }
             }
         }
     }
@@ -99,6 +96,8 @@ public class InvManager extends Module {
                 this.chestTicks++;
             }
 
+            this.moved = false;
+
             this.attackTicks++;
             this.placeTicks++;
 
@@ -111,13 +110,12 @@ public class InvManager extends Module {
                 return;
             }
 
-            this.moved = false;
-
+            int INVENTORY_SLOTS = 4 * 9 + 4;
+            int throwable = -1, bucket = -1;
             int helmet = -1, chestplate = -1, leggings = -1, boots = -1;
             int sword = -1, pickaxe = -1, axe = -1, block = -1, potion = -1, food = -1;
-            Set<Integer> keepSlots = new HashSet<>();
 
-            int INVENTORY_SLOTS = 4 * 9 + 4;
+            Set<Integer> keepSlots = new HashSet<>();
 
             for (int i = 0; i < INVENTORY_SLOTS; i++) {
                 ItemStack stack = mc.thePlayer.inventory.getStackInSlot(i);
@@ -125,7 +123,6 @@ public class InvManager extends Module {
 
                 Item item = stack.getItem();
 
-                if (item instanceof ItemFood && item != Item.getItemById(322) && item != Item.getItemById(466)) continue;
                 if (!InventoryUtil.isValid(stack)) continue;
 
                 if (autoArmor.get() && item instanceof ItemArmor armor) {
@@ -150,28 +147,34 @@ public class InvManager extends Module {
                 if (item instanceof ItemSpade) continue;
 
                 if (item instanceof ItemSword) {
-                    int durability = stack.getMaxDamage() - stack.getItemDamage();
-                    if (sword == -1) sword = i;
-                    else {
-                        ItemStack best = mc.thePlayer.inventory.getStackInSlot(sword);
-                        int bestDurability = best.getMaxDamage() - best.getItemDamage();
-                        boolean fire = EnchantmentHelper.getEnchantmentLevel(Enchantment.fireAspect.effectId, stack) > 0;
-                        boolean bestFire = EnchantmentHelper.getEnchantmentLevel(Enchantment.fireAspect.effectId, best) > 0;
+                    float swordScore = InventoryUtil.calculateSwordScore(stack);
+                    int fireAspect = EnchantmentHelper.getEnchantmentLevel(Enchantment.fireAspect.effectId, stack);
 
-                        if (bestDurability <= 10 && durability > bestDurability) sword = i;
-                        else if (fire && !bestFire) sword = i;
-                        else if (fire == bestFire && damage(stack) > damage(best)) sword = i;
+                    if (sword == -1) {
+                        sword = i;
+                    } else {
+                        ItemStack currentBest = mc.thePlayer.inventory.getStackInSlot(sword);
+                        float bestScore = InventoryUtil.calculateSwordScore(currentBest);
+                        int currentFireAspect = EnchantmentHelper.getEnchantmentLevel(Enchantment.fireAspect.effectId, currentBest);
+
+                        if (fireAspect > 0 && currentFireAspect == 0) {
+                            sword = i;
+                        } else if (fireAspect > 0 && currentFireAspect > 0 && swordScore > bestScore) {
+                            sword = i;
+                        } else if (fireAspect == 0 && currentFireAspect == 0 && swordScore > bestScore) {
+                            sword = i;
+                        }
                     }
                     continue;
                 }
 
                 if (item instanceof ItemPickaxe) {
-                    if (pickaxe == -1 || mineSpeed(stack) > mineSpeed(mc.thePlayer.inventory.getStackInSlot(pickaxe))) pickaxe = i;
+                    if (pickaxe == -1 || InventoryUtil.mineSpeed(stack) > InventoryUtil.mineSpeed(mc.thePlayer.inventory.getStackInSlot(pickaxe))) pickaxe = i;
                     continue;
                 }
 
                 if (item instanceof ItemAxe) {
-                    if (axe == -1 || mineSpeed(stack) > mineSpeed(mc.thePlayer.inventory.getStackInSlot(axe))) axe = i;
+                    if (axe == -1 || InventoryUtil.mineSpeed(stack) > InventoryUtil.mineSpeed(mc.thePlayer.inventory.getStackInSlot(axe))) axe = i;
                     continue;
                 }
 
@@ -185,7 +188,6 @@ public class InvManager extends Module {
                         if (stack.stackSize > currentBlock.stackSize) {
                             block = i;
                         } else if (stack.stackSize == currentBlock.stackSize) {
-                            // If stacks are equal, compare block types to maintain consistency
                             if (Item.getIdFromItem(stack.getItem()) > Item.getIdFromItem(currentBlock.getItem())) {
                                 block = i;
                             }
@@ -205,37 +207,65 @@ public class InvManager extends Module {
                 }
 
                 if (item instanceof ItemFood itemFood) {
-                    keepSlots.add(i);
-                    if (item == Item.getItemById(322) || item == Item.getItemById(466)) {
-                        if (food == -1) food = i;
-                        else {
-                            float curSat = ((ItemFood) mc.thePlayer.inventory.getStackInSlot(food).getItem()).getSaturationModifier(mc.thePlayer.inventory.getStackInSlot(food));
+                    boolean isGoldenApple = item == Item.getItemById(322) || item == Item.getItemById(466);
+
+                    if (isGoldenApple || keepOtherFood.get()) {
+                        keepSlots.add(i);
+
+                        if (food == -1) {
+                            food = i;
+                        } else {
+                            ItemStack currentBestStack = mc.thePlayer.inventory.getStackInSlot(food);
+                            float curSat = ((ItemFood) currentBestStack.getItem()).getSaturationModifier(currentBestStack);
                             float newSat = itemFood.getSaturationModifier(stack);
-                            if (newSat > curSat) food = i;
+
+                            if (newSat > curSat) {
+                                food = i;
+                            }
                         }
                     }
                 }
             }
 
-            if (helmet != -1) keepSlots.add(helmet);
-            if (chestplate != -1) keepSlots.add(chestplate);
-            if (leggings != -1) keepSlots.add(leggings);
-            if (boots != -1) keepSlots.add(boots);
-            if (sword != -1) keepSlots.add(sword);
-            if (pickaxe != -1) keepSlots.add(pickaxe);
-            if (axe != -1) keepSlots.add(axe);
-            if (block != -1) keepSlots.add(block);
-            if (potion != -1) keepSlots.add(potion);
-            if (food != -1) keepSlots.add(food);
+            Stream.of(helmet, chestplate, leggings, boots, sword, pickaxe, axe, block, potion, food).filter(slot -> slot != -1).forEach(keepSlots::add);
 
             for (int i = 0; i < INVENTORY_SLOTS; i++) {
                 if (!keepSlots.contains(i)) {
                     ItemStack stack = mc.thePlayer.inventory.getStackInSlot(i);
                     if (stack == null) continue;
                     Item item = stack.getItem();
+
+                    if (item instanceof ItemBucket) {
+                        if (bucket == -1) {
+                            bucket = i;
+                        }
+                        continue;
+                    }
+
+                    if (item instanceof ItemSnowball || item instanceof ItemEgg || item instanceof ItemEnderPearl) {
+                        if (throwable == -1 || stack.stackSize > mc.thePlayer.inventory.getStackInSlot(throwable).stackSize) {
+                            throwable = i;
+                        }
+                        continue;
+                    }
+
+                    if (item instanceof ItemSword) {
+                        int durability = stack.getMaxDamage() - stack.getItemDamage();
+                        int fireAspect = EnchantmentHelper.getEnchantmentLevel(Enchantment.fireAspect.effectId, stack);
+
+                        if (durability < 30 && fireAspect == 0) {
+                            throwItem(i);
+                        } else if (i != sword) {
+                            throwItem(i);
+                        }
+                        continue;
+                    }
+
                     if (item instanceof ItemSpade || !InventoryUtil.isValid(stack)) {
                         throwItem(i);
-                    } else if (item instanceof ItemFood && item != Item.getItemById(322) && item != Item.getItemById(466)) {
+                    } else if (item instanceof ItemFood && item != Item.getItemById(322)
+                            && item != Item.getItemById(466)
+                            && !keepOtherFood.get()) {
                         throwItem(i);
                     }
                 }
@@ -248,36 +278,35 @@ public class InvManager extends Module {
                 if (boots != -1 && boots != 36) equipItem(boots);
             }
 
-            if (sword != -1 && sword != swordSlot.getValue() - 1) moveItem(sword, (int) (swordSlot.getValue() - 37));
-            if (pickaxe != -1 && pickaxe != pickaxeSlot.getValue() - 1) moveItem(pickaxe, (int) (pickaxeSlot.getValue() - 37));
-            if (axe != -1 && axe != axeSlot.getValue() - 1) moveItem(axe, (int) (axeSlot.getValue() - 37));
-            if (block != -1 && block != blockSlot.getValue() - 1 && !isEnabled(Scaffold.class)) {
-                ItemStack currentSlot = mc.thePlayer.inventory.getStackInSlot((int)(blockSlot.getValue() - 1));
+            if (sword != -1) this.moveItemToSlot(sword, swordSlot);
+            if (pickaxe != -1) this.moveItemToSlot(pickaxe, pickaxeSlot);
+            if (axe != -1) this.moveItemToSlot(axe, axeSlot);
+            if (potion != -1) this.moveItemToSlot(potion, potionSlot);
+            if (food != -1) this.moveItemToSlot(food, gappleSlot);
+            if (throwable != -1) this.moveItemToSlot(throwable, throwableSlot);
+            if (bucket != -1) this.moveItemToSlot(bucket, bucketSlot);
+
+            if (block != -1 && blockSlot.getValue() > 0 && block != blockSlot.getValue()-1 && !isEnabled(Scaffold.class)) {
+                ItemStack currentSlot = mc.thePlayer.inventory.getStackInSlot((int)(blockSlot.getValue()-1));
                 if (currentSlot == null || !ItemStack.areItemStacksEqual(
                         mc.thePlayer.inventory.getStackInSlot(block),
                         currentSlot)) {
-                    moveItem(block, (int) (blockSlot.getValue() - 37));
+                    moveItem(block, (int)(blockSlot.getValue()-37));
                 }
             }
-
-            if (potion != -1 && potion != potionSlot.getValue() - 1) moveItem(potion, (int) (potionSlot.getValue() - 37));
-            if (food != -1 && food != gappleSlot.getValue() - 1) moveItem(food, (int) (gappleSlot.getValue() - 37));
 
             if (canOpenInventory() && !moved) closeInventory();
         }
     }
 
-    @EventTarget
-    public void onAttack(AttackEvent event) {
-        this.attackTicks = 0;
+    private boolean canOpenInventory() {
+        return isEnabled(InvMove.class) && !(mc.currentScreen instanceof GuiInventory);
     }
 
-    @Override
-    public void onDisable() {
-        if (this.canOpenInventory()) {
-            this.closeInventory();
+    private void moveItemToSlot(int itemIndex, SliderValue slotSetting) {
+        if (slotSetting.getValue() > 0 && itemIndex != slotSetting.getValue()-1) {
+            moveItem(itemIndex, (int)(slotSetting.getValue()-37));
         }
-        super.onDisable();
     }
 
     private void openInventory() {
@@ -287,6 +316,36 @@ public class InvManager extends Module {
         }
     }
 
+    private void throwItem(final int slot) {
+        if ((!this.moved || this.nextClick <= 0) && !SelectorDetectionComponent.selector(slot) && dropItems.get()) {
+            if (this.canOpenInventory()) openInventory();
+            mc.playerController.windowClick(mc.thePlayer.inventoryContainer.windowId, this.slot(slot), 1, 4, mc.thePlayer);
+            this.updateNextClick();
+        }
+    }
+
+    private void moveItem(int slot, int destination) {
+        if ((!this.moved || this.nextClick <= 0) && !SelectorDetectionComponent.selector(slot)) {
+            if (this.canOpenInventory()) openInventory();
+            mc.playerController.windowClick(mc.thePlayer.inventoryContainer.windowId, this.slot(slot), this.slot(destination), 2, mc.thePlayer);
+            this.updateNextClick();
+        }
+    }
+
+    private void equipItem(int slot) {
+        if ((!this.moved || this.nextClick <= 0) && !SelectorDetectionComponent.selector(slot) && autoArmor.get()) {
+            if (this.canOpenInventory()) openInventory();
+            mc.playerController.windowClick(mc.thePlayer.inventoryContainer.windowId, this.slot(slot), 0, 1, mc.thePlayer);
+            this.updateNextClick();
+        }
+    }
+
+    private void updateNextClick() {
+        this.nextClick = Math.round((float) MathUtil.getRandom(this.delay.getValue().intValue(), this.delay.getValue().intValue()));
+        this.timerUtil.reset();
+        this.moved = true;
+    }
+
     private void closeInventory() {
         if (this.open) {
             PacketUtils.sendPacket(new C0DPacketCloseWindow(mc.thePlayer.inventoryContainer.windowId));
@@ -294,72 +353,8 @@ public class InvManager extends Module {
         }
     }
 
-    private boolean canOpenInventory() {
-        return isEnabled(InvMove.class) && !(mc.currentScreen instanceof GuiInventory);
-    }
-
-    private void throwItem(final int slot) {
-        if ((!moved || this.nextClick <= 0) && !SelectorDetectionComponent.selector(slot) && dropItems.get()) {
-            if (this.canOpenInventory()) openInventory();
-            mc.playerController.windowClick(mc.thePlayer.inventoryContainer.windowId, this.slot(slot), 1, 4, mc.thePlayer);
-            updateNextClick();
-        }
-    }
-
-    private void moveItem(int slot, int destination) {
-        if ((!moved || this.nextClick <= 0) && !SelectorDetectionComponent.selector(slot)) {
-            if (this.canOpenInventory()) openInventory();
-            mc.playerController.windowClick(mc.thePlayer.inventoryContainer.windowId, this.slot(slot), this.slot(destination), 2, mc.thePlayer);
-            updateNextClick();
-        }
-    }
-
-    private void equipItem(int slot) {
-        if ((!moved || this.nextClick <= 0) && !SelectorDetectionComponent.selector(slot) && autoArmor.get()) {
-            if (this.canOpenInventory()) openInventory();
-            mc.playerController.windowClick(mc.thePlayer.inventoryContainer.windowId, this.slot(slot), 0, 1, mc.thePlayer);
-            updateNextClick();
-        }
-    }
-
-    private void updateNextClick() {
-        this.nextClick = Math.round((float) MathUtil.getRandom(this.delay.getValue().intValue(), this.delay.getValue().intValue()));
-        this.timerUtil.reset();
-        moved = true;
-    }
-
-    private float damage(final ItemStack stack) {
-        final ItemSword sword = (ItemSword) stack.getItem();
-        final int level = EnchantmentHelper.getEnchantmentLevel(Enchantment.sharpness.effectId, stack);
-        return (float) (sword.getDamageVsEntity() + level * 1.25);
-    }
-
-    private float mineSpeed(final ItemStack stack) {
-        final Item item = stack.getItem();
-        int level = EnchantmentHelper.getEnchantmentLevel(Enchantment.efficiency.effectId, stack);
-
-        level = switch (level) {
-            case 1 -> 30;
-            case 2 -> 69;
-            case 3 -> 120;
-            case 4 -> 186;
-            case 5 -> 271;
-            default -> 0;
-        };
-
-        if (item instanceof ItemPickaxe pickaxe) {
-            return pickaxe.getToolMaterial().getEfficiencyOnProperMaterial() + level;
-        } else if (item instanceof ItemSpade shovel) {
-            return shovel.getToolMaterial().getEfficiencyOnProperMaterial() + level;
-        } else if (item instanceof ItemAxe axe) {
-            return axe.getToolMaterial().getEfficiencyOnProperMaterial() + level;
-        }
-
-        return 0;
-    }
-
-    private int armorReduction(final ItemStack stack) {
-        final ItemArmor armor = (ItemArmor) stack.getItem();
+    private int armorReduction(ItemStack stack) {
+        ItemArmor armor = (ItemArmor) stack.getItem();
         return armor.damageReduceAmount + EnchantmentHelper.getEnchantmentModifierDamage(new ItemStack[]{stack}, DamageSource.generic);
     }
 

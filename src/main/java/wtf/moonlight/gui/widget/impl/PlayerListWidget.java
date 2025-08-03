@@ -17,6 +17,7 @@ import wtf.moonlight.util.render.animations.advanced.impl.DecelerateAnimation;
 import java.awt.*;
 import java.util.*;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class PlayerListWidget extends Widget {
     public PlayerListWidget() {
@@ -67,12 +68,15 @@ public class PlayerListWidget extends Widget {
         float avatarHeight = 8f;
         float boxHeight = avatarHeight + padding;
 
-        List<EntityPlayer> currentPlayers = mc.theWorld.playerEntities.stream()
-                .filter(p -> p != mc.thePlayer && mc.thePlayer.getDistanceToEntity(p) < 64)
+        List<EntityPlayer> players = mc.theWorld.playerEntities.stream()
+                .filter(Objects::nonNull)
+                .filter(p -> !p.isDead)
+                .filter(p -> p != mc.thePlayer)
+                .sorted(Comparator.comparingDouble(p -> mc.thePlayer.getDistanceToEntity(p)))
                 .toList();
 
         Set<String> currentPlayerNames = new HashSet<>();
-        for (EntityPlayer player : currentPlayers) {
+        for (EntityPlayer player : players) {
             String name = player.getName();
             currentPlayerNames.add(name);
 

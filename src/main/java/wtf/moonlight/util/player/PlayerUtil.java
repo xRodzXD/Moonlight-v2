@@ -97,9 +97,6 @@ public class PlayerUtil implements InstanceAccess {
         }
     }
 
-
-
-
     /**
      * Gets the block at a position
      *

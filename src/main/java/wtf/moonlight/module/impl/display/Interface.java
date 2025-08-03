@@ -51,7 +51,7 @@ public class Interface extends Module {
     public final ListValue potionHudMode = new ListValue("Potion Mode", new String[]{"Default", "Exhi", "Moon", "Sexy", "Type 1", "Type 2", "NeverLose"}, "NeverLose", this,() -> elements.isEnabled("Potion HUD"));
     public final ListValue notificationMode = new ListValue("Notification Mode", new String[]{"Default", "Test","Type 2","Type 3","Type 4","Type 5", "Test2","Exhi"}, "Default", this,() -> elements.isEnabled("Notification"));
     public final BoolValue centerNotif = new BoolValue("Center Notification",true,this,() -> notificationMode.is("Exhi"));
-    public final ListValue targetHudMode = new ListValue("Mode", new String[]{"Novo 1","Novo 2","Novo 3","Novo 4","Novo 5",
+    public final ListValue targetHudMode = new ListValue("TargetHUD Mode", new String[]{"Novo 1","Novo 2","Novo 3","Novo 4","Novo 5",
             "Type 1", "Type 2", "Type 3", "Type 4", "Exhi", "Moon", "Augustus", "Rise", "Adjust", "Astolfo", "Akrien", "NeverLose"}, "Astolfo", this,() -> elements.isEnabled("Target HUD"));
 
     public final ListValue colorMode = new ListValue("Color Mode", new String[]{"Custom", "Fade", "Rainbow", "Astolfo", "Dynamic", "NeverLose"}, "Dynamic", this);
