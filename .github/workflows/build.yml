@@ -48,8 +48,8 @@ jobs:
 
       - name: Rename and Move Files to Root
         run: |
-          mv ${BUILD_DIR}/Moonlight-1.8.9-all.jar ${GITHUB_WORKSPACE}/${JAR_NAME}
-          mv ${JSON_DIR}/MoonLight.json ${GITHUB_WORKSPACE}/${JSON_NAME}
+          mv ${BUILD_DIR}/${{ env.JAR_NAME }}.jar ${GITHUB_WORKSPACE}/${JAR_NAME}
+          mv ${JSON_DIR}/${{ env.JSON_NAME }}.json ${GITHUB_WORKSPACE}/${JSON_NAME}
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
@@ -59,13 +59,10 @@ jobs:
             ${{ env.JAR_NAME }}
             ${{ env.JSON_NAME }}
 
-      - name: Create Release
-        uses: "0xDylan/action-auto-releases-n20@v1.1"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "latest"
-          prerelease: true
-          title: "Latest Build"
-          files: |
+          name: ${{ env.JAR_NAME }}
+          path: |
             ${{ env.JAR_NAME }}
             ${{ env.JSON_NAME }}
