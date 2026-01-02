@@ -55,5 +55,5 @@ jobs:
         with:
           name: Moonlight
           path: |
-            ${{ env.JAR_NAME }}
-            ${{ env.JSON_NAME }}
+            ${{ env.BUILD_NAME }}.jar
+            ${{ env.BUILD_NAME }}.json
