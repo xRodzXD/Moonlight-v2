@@ -57,7 +57,7 @@ jobs:
         with:
           regexp: "Release (\\d+([.]\\d+)*)\n*((\\s|\\S)+)"
           regexp_options: "us"
-          release_name: "${{ env.JAR_NAME }}: v$1"
+          release_name: "${{ env.BUILD_NAME }}: v$1"
           tag_name: "v$1"
           body: "$3"
           draft: true
